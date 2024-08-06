@@ -320,7 +320,7 @@ def MODEL():
                     # time, height, lat, lon -> time, lon, lat, height
                     log_variable = log(transpose(data, (0, 3, 2, 1)))
                 #return variable[:, lon_idx]
-                rgi = rgiND(coord_dict_data, log_variable, bounds_error=False,fill_value=NaN)
+                rgi = rgiND(coord_dict_data, log_variable[:, lon_idx], bounds_error=False,fill_value=NaN)
                 def interp4d_custom(xvec):
                     return exp(rgi(xvec))
                 return interp4d_custom
