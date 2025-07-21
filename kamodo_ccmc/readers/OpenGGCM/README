@@ -1,6 +1,2 @@
-Fortran source code annnot have comments after teh fortran statement:
-	integer foo      ! comment
-This has to be:
-! comment
-	integer foo
-
+OpenGGCM model uses compresses data (of less than "single" numerical precision) in a compact, transportable ASCII file format.
+Decoding requires a library of Fortran routines that are being called from Python to populate data arrays used in Kamodo.
