@@ -23,7 +23,8 @@ import numpy as np
 from os.path import isfile
 import kamodo_ccmc.flythrough.SF_output as O
 import kamodo_ccmc.flythrough.SF_utilities as U
-
+import os
+from contextlib import redirect_stdout
 
 def SatelliteTrajectory(dataset, start_ts, stop_ts, coord_type='GEO',
                         verbose=False):
@@ -410,10 +411,61 @@ def ModelFlythrough(model, file_dir, variable_list, sat_time, c1, c2, c3,
     # get interpolated results
     # coord_type should be one of SpacePy's or AstroPy's coordinates
     # coord_grid is either 'sph' or 'car'
-    results = U.Model_SatelliteFlythrough(model, file_dir, new_list,
-                                          sat_time, c1, c2, c3,
-                                          coord_type, coord_grid,
-                                          verbose=verbose)
+    
+    chunk_size = 10000
+    total_size = len(sat_time)
+    
+    if total_size <= chunk_size:
+        # Standard execution for small arrays
+        results = U.Model_SatelliteFlythrough(model, file_dir, new_list,
+                                              sat_time, c1, c2, c3,
+                                              coord_type, coord_grid,
+                                              verbose=verbose)
+    else:
+        # Chunked execution for large arrays
+        results = {}
+        for i in range(0, total_size, chunk_size):
+            chunk_sat_time = sat_time[i:i + chunk_size]
+            chunk_c1 = c1[i:i + chunk_size]
+            chunk_c2 = c2[i:i + chunk_size]
+            chunk_c3 = c3[i:i + chunk_size]
+            
+            # Allow prints on the first chunk, suppress on all subsequent chunks
+            if i == 0:
+                chunk_res = U.Model_SatelliteFlythrough(model, file_dir, new_list,
+                                                        chunk_sat_time, chunk_c1, 
+                                                        chunk_c2, chunk_c3,
+                                                        coord_type, coord_grid,
+                                                        verbose=verbose)
+            else:
+                with open(os.devnull, 'w') as f, redirect_stdout(f):
+                    chunk_res = U.Model_SatelliteFlythrough(model, file_dir, new_list,
+                                                            chunk_sat_time, chunk_c1, 
+                                                            chunk_c2, chunk_c3,
+                                                            coord_type, coord_grid,
+                                                            verbose=verbose)
+            
+            # Skip if the chunk returned no valid times
+            if not chunk_res or len(chunk_res.get('utc_time', [])) == 0:
+                continue 
+            
+            # Initialize the combined dictionary keys on the first valid chunk
+            if not results:
+                results = {k: [] for k in chunk_res.keys()}
+            
+            # Append chunk results to the combined lists
+            for k in chunk_res.keys():
+                if k == 'net_idx':
+                    # Apply the offset so indices match the original array
+                    results[k].append(chunk_res[k] + i)
+                else:
+                    results[k].append(chunk_res[k])
+                    
+        # Flatten the collected arrays back into standard 1D arrays
+        if results:
+            results = {k: np.concatenate(v) for k, v in results.items()}
+        else:
+            results = {'utc_time': [], 'c1': [], 'c2': [], 'c3': [], 'net_idx': []}
 
     # remove requested variables not found in the data
     var_list = [key for key in results.keys() if key not in
